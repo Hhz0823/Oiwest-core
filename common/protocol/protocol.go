@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"io"
 
-	"github.com/sb-panel/dccp-kernel/common/buf"
+	"github.com/Hhz0823/oiwest-core/common/buf"
 )
 
 const (

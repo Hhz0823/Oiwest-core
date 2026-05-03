@@ -1,6 +1,6 @@
 .PHONY: all build clean test run install lint
 
-APP_NAME := dccp-kernel
+APP_NAME := oiwest-core
 BUILD_DIR := build
 GO := go
 GOFLAGS := -v

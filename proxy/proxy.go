@@ -9,9 +9,9 @@ import (
 	"sync"
 	"time"
 
-	netaddr "github.com/sb-panel/dccp-kernel/common/net"
-	"github.com/sb-panel/dccp-kernel/config"
-	"github.com/sb-panel/dccp-kernel/transport"
+	netaddr "github.com/Hhz0823/oiwest-core/common/net"
+	"github.com/Hhz0823/oiwest-core/config"
+	"github.com/Hhz0823/oiwest-core/transport"
 )
 
 var (

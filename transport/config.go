@@ -6,7 +6,7 @@ import (
 	"net"
 	"time"
 
-	"github.com/sb-panel/dccp-kernel/transport/dccp"
+	"github.com/Hhz0823/oiwest-core/transport/dccp"
 )
 
 var (

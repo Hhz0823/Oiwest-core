@@ -14,16 +14,16 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/sb-panel/dccp-kernel/config"
-	"github.com/sb-panel/dccp-kernel/proxy"
-	"github.com/sb-panel/dccp-kernel/router"
-	"github.com/sb-panel/dccp-kernel/transport"
-	"github.com/sb-panel/dccp-kernel/transport/dccp"
+	"github.com/Hhz0823/oiwest-core/config"
+	"github.com/Hhz0823/oiwest-core/proxy"
+	"github.com/Hhz0823/oiwest-core/router"
+	"github.com/Hhz0823/oiwest-core/transport"
+	"github.com/Hhz0823/oiwest-core/transport/dccp"
 )
 
 const (
 	Version    = "1.0.0"
-	CoreName   = "DCCP-Kernel"
+	CoreName   = "Oiwest Core"
 	APIVersion = 1
 )
 

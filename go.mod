@@ -1,4 +1,4 @@
-module github.com/sb-panel/dccp-kernel
+module github.com/Hhz0823/oiwest-core
 
 go 1.22
 

@@ -5,7 +5,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/sb-panel/dccp-kernel/transport"
+	"github.com/Hhz0823/oiwest-core/transport"
 )
 
 var (

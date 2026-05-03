@@ -7,8 +7,8 @@ import (
 	"os"
 	"runtime"
 
-	"github.com/sb-panel/dccp-kernel/config"
-	"github.com/sb-panel/dccp-kernel/core"
+	"github.com/Hhz0823/oiwest-core/config"
+	"github.com/Hhz0823/oiwest-core/core"
 )
 
 var (
@@ -20,7 +20,7 @@ var (
 
 const (
 	AppVersion = "1.0.0"
-	AppName    = "DCCP-Kernel"
+	AppName    = "Oiwest Core"
 )
 
 func main() {

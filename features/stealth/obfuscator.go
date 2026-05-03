@@ -8,7 +8,7 @@ import (
 	"math/big"
 	"sync"
 
-	"github.com/sb-panel/dccp-kernel/common/crypto"
+	"github.com/Hhz0823/oiwest-core/common/crypto"
 )
 
 var (

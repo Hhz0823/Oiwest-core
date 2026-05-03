@@ -76,7 +76,7 @@ make build-darwin-arm64
 如果要直接使用 go build：
 
 ```bash
-go build -o build/dccp-kernel ./cmd/dccp-kernel
+go build -o build/oiwest-core ./cmd/oiwest-core
 ```
 
 ### 运行

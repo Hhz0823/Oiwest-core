@@ -9,7 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/sb-panel/dccp-kernel/common/buf"
+	"github.com/Hhz0823/oiwest-core/common/buf"
 )
 
 var (

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/sb-panel/dccp-kernel/config"
+	"github.com/Hhz0823/oiwest-core/config"
 )
 
 var (

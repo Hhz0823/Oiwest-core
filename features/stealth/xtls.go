@@ -15,7 +15,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sb-panel/dccp-kernel/common/crypto"
+	"github.com/Hhz0823/oiwest-core/common/crypto"
 )
 
 type XTLSFlowController struct {
