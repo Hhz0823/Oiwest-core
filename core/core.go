@@ -5,26 +5,24 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"log"
-	"net"
-	"os"
-	"os/signal"
+	"runtime"
 	"sync"
-	"syscall"
 	"time"
 
+	"github.com/Hhz0823/oiwest-core/common/net"
+	"github.com/Hhz0823/oiwest-core/common/platform"
+	"github.com/Hhz0823/oiwest-core/common/tls"
 	"github.com/Hhz0823/oiwest-core/config"
 	"github.com/Hhz0823/oiwest-core/proxy"
 	"github.com/Hhz0823/oiwest-core/router"
-	"github.com/Hhz0823/oiwest-core/transport"
-	"github.com/Hhz0823/oiwest-core/transport/dccp"
+	"github.com/Hhz0823/oiwest-core/transport/bbr"
 )
 
 const (
-	Version    = "1.0.0"
+	Version    = "2.0.1"
 	CoreName   = "Oiwest Core"
-	APIVersion = 1
+	APIVersion = 2
 )
 
 type Core struct {
@@ -37,6 +35,12 @@ type Core struct {
 	mu          sync.Mutex
 	startTime   time.Time
 	stats       *CoreStats
+	workerPool  *WorkerPool
+	bbrCtrl     bbr.BBRCongestionControl
+	dualStack   *net.DualStackDialer
+	multiLine   *net.MultiLineManager
+	certMgr     *tls.CertificateManager
+	executor    *ParallelExecutor
 }
 
 type CoreStats struct {
@@ -44,18 +48,184 @@ type CoreStats struct {
 	DownlinkBytes int64
 	ActiveConns   int64
 	TotalConns    int64
+	TasksQueued   int64
+	TasksDone     int64
 	mu            sync.Mutex
 }
 
 func NewCore(cfg *config.Config) *Core {
 	ctx, cancel := context.WithCancel(context.Background())
-	return &Core{
+	core := &Core{
 		config:    cfg,
 		ctx:       ctx,
 		cancel:    cancel,
 		startTime: time.Now(),
 		stats:     &CoreStats{},
 	}
+
+	if cfg.WorkerPool != nil {
+		wpc := DefaultWorkerPoolConfig()
+		if cfg.WorkerPool.NumWorkers > 0 {
+			wpc.NumWorkers = cfg.WorkerPool.NumWorkers
+		}
+		if cfg.WorkerPool.QueueSize > 0 {
+			wpc.QueueSize = cfg.WorkerPool.QueueSize
+		}
+		core.workerPool = NewWorkerPool(wpc)
+	}
+
+	if cfg.BBR != nil && cfg.BBR.Enabled {
+		bbrCfg := cfg.BBR.Settings
+		if bbrCfg == nil {
+			bbrCfg = bbr.DefaultBBRConfig(cfg.BBR.Algorithm)
+		}
+		core.bbrCtrl = bbr.GetBBRFactory().Create(cfg.BBR.Algorithm, bbrCfg)
+		log.Printf("[%s] BBR congestion control initialized: %s", CoreName, core.bbrCtrl.Name())
+	}
+
+	if cfg.DualStack != nil && cfg.DualStack.Enabled {
+		dsCfg := net.DefaultDualStackConfig()
+		if cfg.DualStack.Config != nil {
+			dsCfg = cfg.DualStack.Config
+		}
+		switch cfg.DualStack.Preference {
+		case "ipv4":
+			dsCfg.Preference = net.IPv4Only
+		case "ipv6":
+			dsCfg.Preference = net.IPv6Only
+		case "dual":
+			dsCfg.Preference = net.PreferDual
+		case "prefer_ipv4":
+			dsCfg.Preference = net.PreferIPv4
+		case "prefer_ipv6":
+			dsCfg.Preference = net.PreferIPv6
+		}
+		dsCfg.MultiLine = cfg.DualStack.MultiLine
+		dsCfg.Failover = cfg.DualStack.Failover
+		dsCfg.Strategy = cfg.DualStack.Strategy
+		core.dualStack = net.NewDualStackDialer(dsCfg)
+		core.multiLine = net.NewMultiLineManager(dsCfg)
+		log.Printf("[%s] Dual-stack dialer initialized: %s", CoreName, cfg.DualStack.Preference)
+	}
+
+	if cfg.Certificate != nil && cfg.Certificate.Enabled {
+		certCfg := cfg.Certificate.Config
+		if certCfg == nil {
+			certCfg = tls.DefaultCertificateConfig()
+		}
+		core.certMgr = tls.NewCertificateManager(certCfg)
+		if cfg.Certificate.AutoGenerate {
+			core.autoGenerateCertificates()
+		}
+	}
+
+	core.executor = NewParallelExecutor(runtime.NumCPU() * 2)
+
+	core.registerAllProtocols()
+
+	return core
+}
+
+func (c *Core) autoGenerateCertificates() {
+	commonName := "localhost"
+	if c.config.Certificate.Config != nil && c.config.Certificate.Config.CommonName != "" {
+		commonName = c.config.Certificate.Config.CommonName
+	}
+	go func() {
+		_, err := c.certMgr.GetCertificate(commonName)
+		if err != nil {
+			log.Printf("[%s] Auto-generate certificate for '%s': %v", CoreName, commonName, err)
+		} else {
+			log.Printf("[%s] TLS certificate auto-generated for '%s'", CoreName, commonName)
+		}
+	}()
+}
+
+func (c *Core) registerAllProtocols() {
+	proxy.RegisterInboundProtocol("vmess", func(ctx context.Context, cfg *config.InboundConfig, mgr *proxy.ProxyManager) (proxy.InboundHandler, error) {
+		return createVMessInbound(cfg, mgr)
+	})
+	proxy.RegisterInboundProtocol("vless", func(ctx context.Context, cfg *config.InboundConfig, mgr *proxy.ProxyManager) (proxy.InboundHandler, error) {
+		return createVLESSInbound(cfg, mgr)
+	})
+	proxy.RegisterInboundProtocol("trojan", func(ctx context.Context, cfg *config.InboundConfig, mgr *proxy.ProxyManager) (proxy.InboundHandler, error) {
+		return createTrojanInbound(cfg, mgr)
+	})
+	proxy.RegisterInboundProtocol("shadowsocks", func(ctx context.Context, cfg *config.InboundConfig, mgr *proxy.ProxyManager) (proxy.InboundHandler, error) {
+		return createShadowsocksInbound(cfg, mgr)
+	})
+	proxy.RegisterInboundProtocol("socks", func(ctx context.Context, cfg *config.InboundConfig, mgr *proxy.ProxyManager) (proxy.InboundHandler, error) {
+		return proxy.NewSOCKSInboundHandler(cfg.Tag, cfg.Port, cfg.Listen, mgr), nil
+	})
+	proxy.RegisterInboundProtocol("http", func(ctx context.Context, cfg *config.InboundConfig, mgr *proxy.ProxyManager) (proxy.InboundHandler, error) {
+		return proxy.NewHTTPInboundHandler(cfg.Tag, cfg.Port, cfg.Listen, mgr), nil
+	})
+	proxy.RegisterInboundProtocol("dokodemo-door", proxy.CreateDokodemoInbound)
+	proxy.RegisterInboundProtocol("loopback", proxy.CreateLoopbackInbound)
+	proxy.RegisterInboundProtocol("dccp", func(ctx context.Context, cfg *config.InboundConfig, mgr *proxy.ProxyManager) (proxy.InboundHandler, error) {
+		return proxy.NewDCCPInboundHandler(cfg.Tag, cfg.Port, cfg.Listen, cfg.StreamSettings, mgr), nil
+	})
+
+	proxy.RegisterOutboundProtocol("freedom", func(ctx context.Context, cfg *config.OutboundConfig) (proxy.OutboundHandler, error) {
+		return proxy.NewFreedomOutboundHandler(cfg.Tag), nil
+	})
+	proxy.RegisterOutboundProtocol("blackhole", func(ctx context.Context, cfg *config.OutboundConfig) (proxy.OutboundHandler, error) {
+		return proxy.NewBlackholeOutboundHandler(cfg.Tag), nil
+	})
+	proxy.RegisterOutboundProtocol("direct", func(ctx context.Context, cfg *config.OutboundConfig) (proxy.OutboundHandler, error) {
+		return proxy.NewDirectOutboundHandler(cfg.Tag), nil
+	})
+	proxy.RegisterOutboundProtocol("dns", proxy.CreateDNSOutbound)
+	proxy.RegisterOutboundProtocol("vmess", func(ctx context.Context, cfg *config.OutboundConfig) (proxy.OutboundHandler, error) {
+		return createVMessOutbound(cfg)
+	})
+	proxy.RegisterOutboundProtocol("vless", func(ctx context.Context, cfg *config.OutboundConfig) (proxy.OutboundHandler, error) {
+		return createVLESSOutbound(cfg)
+	})
+	proxy.RegisterOutboundProtocol("trojan", func(ctx context.Context, cfg *config.OutboundConfig) (proxy.OutboundHandler, error) {
+		return createTrojanOutbound(cfg)
+	})
+	proxy.RegisterOutboundProtocol("shadowsocks", func(ctx context.Context, cfg *config.OutboundConfig) (proxy.OutboundHandler, error) {
+		return createShadowsocksOutbound(cfg)
+	})
+	proxy.RegisterOutboundProtocol("socks", func(ctx context.Context, cfg *config.OutboundConfig) (proxy.OutboundHandler, error) {
+		return proxy.NewSocksOutboundHandler(cfg.Tag), nil
+	})
+	proxy.RegisterOutboundProtocol("dccp", func(ctx context.Context, cfg *config.OutboundConfig) (proxy.OutboundHandler, error) {
+		return proxy.NewDCCPOutboundHandler(cfg.Tag, net.Address{}, cfg.StreamSettings), nil
+	})
+}
+
+func createVMessInbound(cfg *config.InboundConfig, mgr *proxy.ProxyManager) (proxy.InboundHandler, error) {
+	return proxy.NewVmessInboundHandler(cfg.Tag, cfg.Port, cfg.Listen, cfg.Settings, cfg.StreamSettings, mgr), nil
+}
+
+func createVLESSInbound(cfg *config.InboundConfig, mgr *proxy.ProxyManager) (proxy.InboundHandler, error) {
+	return proxy.NewVlessInboundHandler(cfg.Tag, cfg.Port, cfg.Listen, cfg.Settings, cfg.StreamSettings, mgr), nil
+}
+
+func createTrojanInbound(cfg *config.InboundConfig, mgr *proxy.ProxyManager) (proxy.InboundHandler, error) {
+	return proxy.NewTrojanInboundHandler(cfg.Tag, cfg.Port, cfg.Listen, cfg.Settings, cfg.StreamSettings, mgr), nil
+}
+
+func createShadowsocksInbound(cfg *config.InboundConfig, mgr *proxy.ProxyManager) (proxy.InboundHandler, error) {
+	return proxy.NewShadowsocksInboundHandler(cfg.Tag, cfg.Port, cfg.Listen, cfg.Settings, cfg.StreamSettings, mgr), nil
+}
+
+func createVMessOutbound(cfg *config.OutboundConfig) (proxy.OutboundHandler, error) {
+	return &proxy.VMessOutboundHandler{}, nil
+}
+
+func createVLESSOutbound(cfg *config.OutboundConfig) (proxy.OutboundHandler, error) {
+	return &proxy.VLESSOutboundHandler{}, nil
+}
+
+func createTrojanOutbound(cfg *config.OutboundConfig) (proxy.OutboundHandler, error) {
+	return &proxy.TrojanOutboundHandler{}, nil
+}
+
+func createShadowsocksOutbound(cfg *config.OutboundConfig) (proxy.OutboundHandler, error) {
+	return &proxy.ShadowsocksOutboundHandler{}, nil
 }
 
 func (c *Core) Start() error {
@@ -67,7 +237,7 @@ func (c *Core) Start() error {
 	}
 
 	log.Printf("[%s] Starting %s v%s", CoreName, CoreName, Version)
-	log.Printf("[%s] DCCP Protocol Kernel initializing...", CoreName)
+	log.Printf("[%s] Go version: %s | OS/Arch: %s/%s", CoreName, runtime.Version(), runtime.GOOS, runtime.GOARCH)
 
 	c.proxyMgr = proxy.NewProxyManager(c.config)
 
@@ -80,37 +250,79 @@ func (c *Core) Start() error {
 
 	c.registerDefaultOutbounds()
 
+	if c.workerPool != nil {
+		log.Printf("[%s] Worker pool: %d workers", CoreName, c.workerPool.NumWorkers())
+	}
+
 	if err := c.proxyMgr.Start(); err != nil {
 		return fmt.Errorf("failed to start proxy manager: %w", err)
 	}
 
+	c.startBackgroundTasks()
+
 	c.running = true
-	log.Printf("[%s] Core started successfully", CoreName)
-	log.Printf("[%s] DCCP Protocol ready on configured ports", CoreName)
+	log.Printf("[%s] Core v%s started successfully", CoreName, Version)
+	log.Printf("[%s] Protocols: VMess, VLESS, Trojan, Shadowsocks, SOCKS, HTTP, Dokodemo, Loopback, DNS, DCCP", CoreName)
+	log.Printf("[%s] Transports: TCP, mKCP, WebSocket, HTTP/2, QUIC, gRPC, XHTTP, DCCP", CoreName)
+	log.Printf("[%s] Features: WorkerPool, BBR, DualStack, TLS, Stealth", CoreName)
 
 	return nil
 }
 
-func (c *Core) registerDefaultOutbounds() {
-	directHandler := &DirectOutboundHandler{
-		tag: "direct",
+func (c *Core) startBackgroundTasks() {
+	if c.workerPool != nil {
+		c.executor.Execute(func() {
+			ticker := time.NewTicker(10 * time.Second)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ticker.C:
+					c.stats.mu.Lock()
+					c.stats.TasksQueued = int64(c.workerPool.Pending())
+					c.stats.TasksDone = c.workerPool.Completed()
+					c.stats.mu.Unlock()
+				case <-c.ctx.Done():
+					return
+				}
+			}
+		})
 	}
+	if c.multiLine != nil && c.config.DualStack.MultiLine {
+		c.multiLine.StartProbing(30 * time.Second)
+	}
+	if c.bbrCtrl != nil {
+		c.executor.Execute(func() {
+			ticker := time.NewTicker(1 * time.Second)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ticker.C:
+					c.bbrCtrl.OnRTTUpdate(time.Second)
+				case <-c.ctx.Done():
+					return
+				}
+			}
+		})
+	}
+}
+
+func (c *Core) registerDefaultOutbounds() {
+	directHandler := proxy.NewDirectOutboundHandler("direct")
 	c.proxyMgr.RegisterOutbound(directHandler)
 
-	freedomHandler := &FreedomOutboundHandler{
-		tag: "freedom",
-	}
+	freedomHandler := proxy.NewFreedomOutboundHandler("freedom")
 	c.proxyMgr.RegisterOutbound(freedomHandler)
 
-	blackholeHandler := &BlackholeOutboundHandler{
-		tag: "blackhole",
-	}
+	blackholeHandler := proxy.NewBlackholeOutboundHandler("blackhole")
 	c.proxyMgr.RegisterOutbound(blackholeHandler)
+
+	dnsHandler := proxy.NewDNSOutboundHandler("dns", "udp", "8.8.8.8", 53)
+	c.proxyMgr.RegisterOutbound(dnsHandler)
 
 	for _, outbound := range c.config.Outbounds {
 		handler, err := c.createOutboundHandler(&outbound)
 		if err != nil {
-			log.Printf("[%s] Warning: failed to create outbound handler '%s': %v", CoreName, outbound.Tag, err)
+			log.Printf("[%s] Warning: failed to create outbound '%s': %v", CoreName, outbound.Tag, err)
 			continue
 		}
 		c.proxyMgr.RegisterOutbound(handler)
@@ -119,24 +331,21 @@ func (c *Core) registerDefaultOutbounds() {
 }
 
 func (c *Core) createOutboundHandler(outbound *config.OutboundConfig) (proxy.OutboundHandler, error) {
+	factory, err := proxy.GetOutboundFactory(proxy.ProtocolType(outbound.Protocol))
+	if err == nil {
+		return factory(c.ctx, outbound)
+	}
 	switch outbound.Protocol {
 	case "dccp":
-		return &DCCPOutboundProxyHandler{
-			tag:            outbound.Tag,
-			streamSettings: outbound.StreamSettings,
-		}, nil
+		return proxy.NewDCCPOutboundHandler(outbound.Tag, net.Address{}, outbound.StreamSettings), nil
 	case "freedom":
-		return &FreedomOutboundHandler{
-			tag: outbound.Tag,
-		}, nil
+		return proxy.NewFreedomOutboundHandler(outbound.Tag), nil
 	case "blackhole":
-		return &BlackholeOutboundHandler{
-			tag: outbound.Tag,
-		}, nil
+		return proxy.NewBlackholeOutboundHandler(outbound.Tag), nil
+	case "dns":
+		return proxy.NewDNSOutboundHandler(outbound.Tag, "udp", "8.8.8.8", 53), nil
 	default:
-		return &DirectOutboundHandler{
-			tag: outbound.Tag,
-		}, nil
+		return proxy.NewDirectOutboundHandler(outbound.Tag), nil
 	}
 }
 
@@ -154,6 +363,15 @@ func (c *Core) Stop() error {
 	if c.proxyMgr != nil {
 		c.proxyMgr.Close()
 	}
+	if c.workerPool != nil {
+		c.workerPool.Shutdown()
+	}
+	if c.multiLine != nil {
+		c.multiLine.Stop()
+	}
+	if c.dualStack != nil {
+		c.dualStack.Close()
+	}
 
 	c.running = false
 	log.Printf("[%s] Core stopped", CoreName)
@@ -161,9 +379,7 @@ func (c *Core) Stop() error {
 }
 
 func (c *Core) WaitForSignal() {
-	sigCh := make(chan os.Signal, 1)
-	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-	sig := <-sigCh
+	sig := platform.WaitForSignal()
 	log.Printf("[%s] Received signal: %v", CoreName, sig)
 	c.Stop()
 }
@@ -174,103 +390,14 @@ func (c *Core) IsRunning() bool {
 	return c.running
 }
 
-func (c *Core) Config() *config.Config {
-	return c.config
-}
-
-func (c *Core) Router() *router.Router {
-	return c.router
-}
-
-func (c *Core) Uptime() time.Duration {
-	return time.Since(c.startTime)
-}
-
-func (c *Core) Stats() *CoreStats {
-	return c.stats
-}
-
-type DirectOutboundHandler struct {
-	tag string
-}
-
-func (h *DirectOutboundHandler) Tag() string { return h.tag }
-
-func (h *DirectOutboundHandler) Process(ctx context.Context, link *proxy.Link) error {
-	return errors.New("direct outbound: no target specified")
-}
-
-type FreedomOutboundHandler struct {
-	tag string
-}
-
-func (h *FreedomOutboundHandler) Tag() string { return h.tag }
-
-func (h *FreedomOutboundHandler) Process(ctx context.Context, link *proxy.Link) error {
-	go io.Copy(io.Discard, link.Reader)
-	return nil
-}
-
-type BlackholeOutboundHandler struct {
-	tag string
-}
-
-func (h *BlackholeOutboundHandler) Tag() string { return h.tag }
-
-func (h *BlackholeOutboundHandler) Process(ctx context.Context, link *proxy.Link) error {
-	go io.Copy(io.Discard, link.Reader)
-	return nil
-}
-
-type DCCPOutboundProxyHandler struct {
-	tag            string
-	streamSettings *transport.StreamSettings
-}
-
-func (h *DCCPOutboundProxyHandler) Tag() string { return h.tag }
-
-func (h *DCCPOutboundProxyHandler) Process(ctx context.Context, link *proxy.Link) error {
-	if h.streamSettings == nil {
-		h.streamSettings = &transport.StreamSettings{
-			Network: transport.TransportDCCP,
-			DCCPSettings: &transport.DCCPSettings{
-				CCID:             dccp.CCID4,
-				ServiceCode:      "V2RY",
-				MaxPacketSize:    1500,
-				HandshakeTimeout: 15 * time.Second,
-				MaxRetries:       3,
-			},
-		}
-	}
-
-	targetAddr := &net.TCPAddr{
-		IP:   net.IPv4(127, 0, 0, 1),
-		Port: 33445,
-	}
-
-	dccpTransport := transport.NewDCCPTransport(h.streamSettings)
-	if err := dccpTransport.Dial(ctx, targetAddr); err != nil {
-		return fmt.Errorf("dccp dial failed: %w", err)
-	}
-	defer dccpTransport.Close()
-
-	errCh := make(chan error, 2)
-	go func() {
-		_, err := io.Copy(dccpTransport, link.Reader)
-		errCh <- err
-	}()
-	go func() {
-		_, err := io.Copy(link.Writer, dccpTransport)
-		errCh <- err
-	}()
-
-	select {
-	case err := <-errCh:
-		return err
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-}
+func (c *Core) Config() *config.Config { return c.config }
+func (c *Core) Router() *router.Router { return c.router }
+func (c *Core) Uptime() time.Duration  { return time.Since(c.startTime) }
+func (c *Core) Stats() *CoreStats      { return c.stats }
+func (c *Core) WorkerPool() *WorkerPool { return c.workerPool }
+func (c *Core) BBR() bbr.BBRCongestionControl { return c.bbrCtrl }
+func (c *Core) DualStack() *net.DualStackDialer { return c.dualStack }
+func (c *Core) CertManager() *tls.CertificateManager { return c.certMgr }
 
 func (c *Core) LoadConfig(data []byte) error {
 	c.mu.Lock()

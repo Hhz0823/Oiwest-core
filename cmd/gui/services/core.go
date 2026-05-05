@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -77,7 +78,11 @@ func (cm *CoreManager) Start() error {
 	if cm.exePath == "" {
 		exe, err := os.Executable()
 		if err == nil {
-			cm.exePath = filepath.Join(filepath.Dir(exe), "oiwest-core.exe")
+			base := filepath.Join(filepath.Dir(exe), "oiwest-core")
+			if runtime.GOOS == "windows" {
+				base += ".exe"
+			}
+			cm.exePath = base
 		}
 	}
 
@@ -155,26 +160,28 @@ func (cm *CoreManager) readLogs(reader io.Reader) {
 
 func (cm *CoreManager) Stop() error {
 	cm.mu.Lock()
-	defer cm.mu.Unlock()
-
 	if cm.status != CoreStatusRunning {
+		cm.mu.Unlock()
 		return nil
 	}
-
-	if cm.cancel != nil {
-		cm.cancel()
+	cancelFn := cm.cancel
+	var cmdProc *os.Process
+	if cm.cmd != nil {
+		cmdProc = cm.cmd.Process
 	}
-
-	if cm.cmd != nil && cm.cmd.Process != nil {
-		cm.cmd.Process.Signal(os.Interrupt)
-		time.Sleep(200 * time.Millisecond)
-		if cm.cmd.ProcessState == nil || !cm.cmd.ProcessState.Exited() {
-			cm.cmd.Process.Kill()
-		}
-	}
-
 	cm.status = CoreStatusStopped
 	atomic.StoreInt32(&cm.running, 0)
+	cm.mu.Unlock()
+
+	if cancelFn != nil {
+		cancelFn()
+	}
+	if cmdProc != nil {
+		cmdProc.Signal(os.Interrupt)
+		time.Sleep(500 * time.Millisecond)
+		cmdProc.Kill()
+	}
+
 	cm.addLog("[信息] Oiwest Core 已停止")
 	return nil
 }
@@ -183,7 +190,7 @@ func (cm *CoreManager) Restart() error {
 	if err := cm.Stop(); err != nil {
 		log.Printf("Stop error during restart: %v", err)
 	}
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(800 * time.Millisecond)
 	return cm.Start()
 }
 

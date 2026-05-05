@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import type {
   ServerNode, ServerGroup, CoreStatus, ProxySettings, TrafficStats,
   LatencyResult, KernelStatus, InboundRule, RoutingRule, DNSConfig,
-  DNSServerItem, TransparentProxyConfig
+  DNSServerItem, TransparentProxyConfig, DeviceInfo, SystemUsage, TLSKeyPair
 } from '../types'
 
 declare global {
@@ -58,6 +58,14 @@ declare global {
           RemoveDNSServer(index: number): Promise<void>
           GetTransparentProxyConfig(): Promise<TransparentProxyConfig>
           SetTransparentProxyConfig(cfg: TransparentProxyConfig): Promise<void>
+          GetDeviceInfo(): Promise<DeviceInfo>
+          GetSystemUsage(): Promise<SystemUsage>
+          GetPublicIP(): Promise<string>
+          RefreshPublicIP(): Promise<string>
+          GetPublicIPv6(): Promise<string>
+          GetSystemNetworkInfo(): Promise<Record<string, string>>
+          GenerateTLS(commonName: string): Promise<TLSKeyPair>
+          GenerateRealityKeys(): Promise<Record<string, string>>
         }
       }
     }
@@ -92,6 +100,8 @@ interface AppState {
   routingRules: RoutingRule[]
   dnsConfig: DNSConfig | null
   transparentProxy: TransparentProxyConfig | null
+  deviceInfo: DeviceInfo | null
+  systemUsage: SystemUsage | null
 
   loadNodes: () => Promise<void>
   loadGroups: () => Promise<void>
@@ -139,6 +149,10 @@ interface AppState {
   removeDNSServer: (index: number) => Promise<void>
   setTransparentProxyConfig: (cfg: TransparentProxyConfig) => Promise<void>
 
+  loadDeviceInfo: () => Promise<void>
+  refreshSystemUsage: () => Promise<void>
+  refreshPublicIP: () => Promise<void>
+
   initApp: () => Promise<void>
 }
 
@@ -151,6 +165,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   activeNodeID: '', logs: [], appVersion: '1.0.0', loading: false,
   kernelStatus: null, nodeLatencies: {},
   inbounds: [], routingRules: [], dnsConfig: null, transparentProxy: null,
+  deviceInfo: null, systemUsage: null,
 
   loadNodes: async () => {
     const nodes = await invoke<ServerNode[]>('App.GetNodes')
@@ -239,6 +254,25 @@ export const useAppStore = create<AppState>((set, get) => ({
   removeDNSServer: async (i) => { await invoke<void>('App.RemoveDNSServer', i); get().loadNetworkConfig() },
   setTransparentProxyConfig: async (cfg) => { await invoke<void>('App.SetTransparentProxyConfig', cfg); set({ transparentProxy: cfg }) },
 
+  loadDeviceInfo: async () => {
+    try {
+      const info = await invoke<DeviceInfo>('App.GetDeviceInfo')
+      set({ deviceInfo: info })
+    } catch {}
+  },
+  refreshSystemUsage: async () => {
+    try {
+      const usage = await invoke<SystemUsage>('App.GetSystemUsage')
+      set({ systemUsage: usage })
+    } catch {}
+  },
+  refreshPublicIP: async () => {
+    try {
+      const ip = await invoke<string>('App.RefreshPublicIP')
+      set((s) => ({ systemUsage: s.systemUsage ? { ...s.systemUsage, publicIp: ip } : null }))
+    } catch {}
+  },
+
   initApp: async () => {
     set({ loading: true })
     await get().loadNodes()
@@ -247,6 +281,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     await get().refreshCoreStatus()
     await get().refreshKernelStatus()
     await get().loadProxySettings()
+    await get().loadDeviceInfo()
+    await get().refreshSystemUsage()
     const v = await invoke<string>('App.GetAppVersion'); set({ appVersion: v || '1.0.0' })
     window.runtime?.EventsOn('core-log', (msg: string) => get().addLog(msg))
     window.runtime?.EventsOn('stats-update', (stats: TrafficStats) => get().updateStats(stats))

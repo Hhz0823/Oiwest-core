@@ -10,11 +10,12 @@ import (
 	"time"
 
 	"github.com/Hhz0823/oiwest-core/cmd/gui/services"
+	"github.com/Hhz0823/oiwest-core/common/platform"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
-	"github.com/wailsapp/wails/v2/pkg/options/windows"
+	wailsWindows "github.com/wailsapp/wails/v2/pkg/options/windows"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -22,13 +23,15 @@ import (
 var assets embed.FS
 
 type App struct {
-	ctx       context.Context
-	nodeMgr   *services.NodeManager
-	coreMgr   *services.CoreManager
-	proxyMgr  *services.ProxyManager
-	statsMgr  *services.StatsManager
-	netMgr    *services.NetworkConfigManager
-	dataPath  string
+	ctx      context.Context
+	nodeMgr  *services.NodeManager
+	coreMgr  *services.CoreManager
+	proxyMgr *services.ProxyManager
+	statsMgr *services.StatsManager
+	netMgr   *services.NetworkConfigManager
+	sysMgr   *services.SysInfoManager
+	tlsMgr   *services.TLSCertManager
+	dataPath string
 }
 
 func NewApp() *App {
@@ -38,8 +41,8 @@ func NewApp() *App {
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 
-	homeDir, _ := os.UserHomeDir()
-	a.dataPath = filepath.Join(homeDir, ".oiwest")
+	p := platform.Get()
+	a.dataPath = p.AppDir
 	os.MkdirAll(a.dataPath, 0755)
 
 	a.nodeMgr = services.GetNodeManager()
@@ -47,20 +50,24 @@ func (a *App) startup(ctx context.Context) {
 	a.proxyMgr = services.GetProxyManager()
 	a.statsMgr = services.GetStatsManager()
 	a.netMgr = services.GetNetworkConfigManager()
+	a.sysMgr = services.GetSysInfoManager()
+	a.tlsMgr = services.GetTLSCertManager()
 
 	a.nodeMgr.SetDataPath(a.dataPath)
 	a.coreMgr.SetPaths("", "", a.dataPath)
 	a.netMgr.SetDataPath(a.dataPath)
+	a.tlsMgr.SetDataPath(a.dataPath)
 	a.statsMgr.StartMonitoring()
 
 	exePath, _ := os.Executable()
 	exeDir := filepath.Dir(exePath)
 
+	exeName := platform.Get().ExeName()
 	searchPaths := []string{
-		filepath.Join(exeDir, "oiwest-core.exe"),
-		filepath.Join(filepath.Dir(exeDir), "oiwest-core.exe"),
-		filepath.Join(a.dataPath, "oiwest-core.exe"),
-		"oiwest-core.exe",
+		filepath.Join(exeDir, exeName),
+		filepath.Join(filepath.Dir(exeDir), exeName),
+		filepath.Join(a.dataPath, exeName),
+		exeName,
 	}
 
 	for _, corePath := range searchPaths {
@@ -85,17 +92,16 @@ func (a *App) shutdown(ctx context.Context) {
 	a.nodeMgr.SaveNodes()
 }
 
-// ==================== Kernel Management ====================
-
 func (a *App) IsKernelInstalled() bool {
 	exePath, _ := os.Executable()
 	exeDir := filepath.Dir(exePath)
+	exeName := platform.Get().ExeName()
 
 	searchPaths := []string{
-		filepath.Join(exeDir, "oiwest-core.exe"),
-		filepath.Join(filepath.Dir(exeDir), "oiwest-core.exe"),
-		filepath.Join(a.dataPath, "oiwest-core.exe"),
-		"oiwest-core.exe",
+		filepath.Join(exeDir, exeName),
+		filepath.Join(filepath.Dir(exeDir), exeName),
+		filepath.Join(a.dataPath, exeName),
+		exeName,
 	}
 
 	for _, p := range searchPaths {
@@ -109,11 +115,12 @@ func (a *App) IsKernelInstalled() bool {
 func (a *App) GetKernelPath() string {
 	exePath, _ := os.Executable()
 	exeDir := filepath.Dir(exePath)
+	exeName := platform.Get().ExeName()
 
 	searchPaths := []string{
-		filepath.Join(exeDir, "oiwest-core.exe"),
-		filepath.Join(filepath.Dir(exeDir), "oiwest-core.exe"),
-		filepath.Join(a.dataPath, "oiwest-core.exe"),
+		filepath.Join(exeDir, exeName),
+		filepath.Join(filepath.Dir(exeDir), exeName),
+		filepath.Join(a.dataPath, exeName),
 	}
 
 	for _, p := range searchPaths {
@@ -139,11 +146,9 @@ func (a *App) GetKernelStatus() map[string]interface{} {
 }
 
 func (a *App) DownloadKernel(url string) error {
-	runtime.EventsEmit(a.ctx, "core-log", "[信息] 内核下载功能需要手动放置 oiwest-core.exe 到程序目录")
-	return fmt.Errorf("请手动将 oiwest-core.exe 放置到程序目录中")
+	runtime.EventsEmit(a.ctx, "core-log", "[info] Kernel download requires manual placement of oiwest-core binary")
+	return fmt.Errorf("please manually place oiwest-core binary in the program directory")
 }
-
-// ==================== Node Management ====================
 
 func (a *App) GetNodes() []*services.ServerNode {
 	return a.nodeMgr.GetAllNodes()
@@ -183,7 +188,7 @@ func (a *App) ImportFromLink(link string) (*services.ServerNode, error) {
 func (a *App) TestNodeLatency(nodeID string) services.LatencyResult {
 	node := a.nodeMgr.GetNode(nodeID)
 	if node == nil {
-		return services.LatencyResult{NodeID: nodeID, Success: false, Error: "节点不存在"}
+		return services.LatencyResult{NodeID: nodeID, Success: false, Error: "node not found"}
 	}
 	result := services.TestNodeLatency(node.Address, node.Port, 5*time.Second)
 	result.NodeID = nodeID
@@ -234,23 +239,10 @@ func (a *App) GetNodeIPs(nodeID string) []string {
 	return ips
 }
 
-// ==================== Core Management ====================
-
-func (a *App) StartCore() error {
-	return a.coreMgr.Start()
-}
-
-func (a *App) StopCore() error {
-	return a.coreMgr.Stop()
-}
-
-func (a *App) RestartCore() error {
-	return a.coreMgr.Restart()
-}
-
-func (a *App) GetCoreStatus() string {
-	return string(a.coreMgr.GetStatus())
-}
+func (a *App) StartCore() error      { return a.coreMgr.Start() }
+func (a *App) StopCore() error       { return a.coreMgr.Stop() }
+func (a *App) RestartCore() error    { return a.coreMgr.Restart() }
+func (a *App) GetCoreStatus() string { return string(a.coreMgr.GetStatus()) }
 
 func (a *App) GetCoreUptime() string {
 	d := a.coreMgr.Uptime()
@@ -266,7 +258,7 @@ func (a *App) GetCoreUptime() string {
 func (a *App) SelectNode(nodeID string) error {
 	node := a.nodeMgr.GetNode(nodeID)
 	if node == nil {
-		return fmt.Errorf("节点不存在: %s", nodeID)
+		return fmt.Errorf("node not found: %s", nodeID)
 	}
 
 	baseConfig := services.GenerateConfigJSON(node)
@@ -312,7 +304,6 @@ func (a *App) GetActiveNodeID() string {
 	if err != nil {
 		return ""
 	}
-
 	type vnextItem struct {
 		Address string `json:"address"`
 		Port    int    `json:"port"`
@@ -329,10 +320,8 @@ func (a *App) GetActiveNodeID() string {
 	type configWrapper struct {
 		Outbounds []outboundItem `json:"outbounds"`
 	}
-
 	var cfg configWrapper
 	json.Unmarshal([]byte(data), &cfg)
-
 	for _, ob := range cfg.Outbounds {
 		for _, vn := range ob.Settings.Vnext {
 			for _, node := range a.nodeMgr.GetAllNodes() {
@@ -345,8 +334,6 @@ func (a *App) GetActiveNodeID() string {
 	return ""
 }
 
-// ==================== Proxy Management ====================
-
 func (a *App) GetProxySettings() services.ProxySettings {
 	return a.proxyMgr.GetSettings()
 }
@@ -356,33 +343,15 @@ func (a *App) SetProxySettings(settings services.ProxySettings) error {
 	return nil
 }
 
-func (a *App) EnableProxy() error {
-	return a.proxyMgr.Enable()
-}
-
-func (a *App) DisableProxy() error {
-	return a.proxyMgr.Disable()
-}
-
-func (a *App) ToggleProxy() error {
-	return a.proxyMgr.Toggle()
-}
-
-func (a *App) IsProxyEnabled() bool {
-	return a.proxyMgr.IsEnabled()
-}
-
-// ==================== Traffic Stats ====================
-
-func (a *App) GetTrafficStats() services.TrafficStats {
-	return a.statsMgr.GetStats()
-}
+func (a *App) EnableProxy() error                     { return a.proxyMgr.Enable() }
+func (a *App) DisableProxy() error                    { return a.proxyMgr.Disable() }
+func (a *App) ToggleProxy() error                     { return a.proxyMgr.Toggle() }
+func (a *App) IsProxyEnabled() bool                   { return a.proxyMgr.IsEnabled() }
+func (a *App) GetTrafficStats() services.TrafficStats { return a.statsMgr.GetStats() }
 
 func (a *App) ResetTrafficStats() {
 	a.statsMgr.ResetStats()
 }
-
-// ==================== Logs ====================
 
 func (a *App) GetCoreLogs(count int) []string {
 	return a.coreMgr.GetLogs(count)
@@ -393,21 +362,19 @@ func (a *App) GetFilteredLogs(category string, count int) []string {
 	if category == "" || category == "all" {
 		return allLogs
 	}
-
 	prefix := ""
 	switch category {
 	case "error":
-		prefix = "[错误]"
+		prefix = "[error]"
 	case "warn":
-		prefix = "[警告]"
+		prefix = "[warn]"
 	case "info":
-		prefix = "[信息]"
+		prefix = "[info]"
 	case "debug":
-		prefix = "[调试]"
+		prefix = "[debug]"
 	default:
 		return allLogs
 	}
-
 	filtered := make([]string, 0)
 	for _, log := range allLogs {
 		if len(log) >= len(prefix) && log[:len(prefix)] == prefix {
@@ -428,8 +395,6 @@ func (a *App) CopyLogs(logs []string) {
 	}
 	runtime.ClipboardSetText(a.ctx, text)
 }
-
-// ==================== Network Configuration ====================
 
 func (a *App) GetInbounds() []services.InboundRule {
 	return a.netMgr.GetInbounds()
@@ -495,10 +460,26 @@ func (a *App) SetTransparentProxyConfig(cfg services.TransparentProxyConfig) err
 	return a.netMgr.SetTransparentProxyConfig(cfg)
 }
 
-// ==================== Misc ====================
-
 func (a *App) GetAppVersion() string {
-	return "1.0.0"
+	return "1.1.0"
+}
+
+func (a *App) GetDeviceInfo() services.DeviceInfo   { return a.sysMgr.GetDeviceInfo() }
+func (a *App) GetSystemUsage() services.SystemUsage { return a.sysMgr.GetSystemUsage() }
+func (a *App) GetPublicIP() string                  { return a.sysMgr.GetPublicIP() }
+func (a *App) RefreshPublicIP() string              { return a.sysMgr.RefreshPublicIP() }
+
+func (a *App) GenerateTLS(path string) services.TLSKeyPair {
+	result, err := a.tlsMgr.GenerateCertificate(path)
+	if err != nil {
+		return services.TLSKeyPair{}
+	}
+	return *result
+}
+
+func (a *App) GenerateRealityKeys() map[string]string {
+	result, _ := a.tlsMgr.GenerateRealityKeys()
+	return result
 }
 
 func (a *App) GenerateQRCode(nodeID string) string {
@@ -527,27 +508,36 @@ func (a *App) OpenExternalURL(url string) {
 }
 
 func main() {
+	p := platform.Get()
+
+	if p.IsHeadless {
+		fmt.Println("Oiwest Core GUI is not available in headless mode.")
+		fmt.Println("Please use the daemon mode: oiwest-daemon")
+		os.Exit(1)
+	}
+
 	app := NewApp()
 
+	var windowOptions *wailsWindows.Options
+	if p.IsWindows() {
+		windowOptions = &wailsWindows.Options{
+			WebviewIsTransparent: true,
+			WindowIsTranslucent:  false,
+		}
+	}
+
 	err := wails.Run(&options.App{
-		Title:     "Oiwest Core",
-		Width:     1100,
-		Height:    700,
-		MinWidth:  860,
-		MinHeight: 520,
-		AssetServer: &assetserver.Options{
-			Assets: assets,
-		},
+		Title:            "Oiwest Core",
+		Width:            1100,
+		Height:           700,
+		MinWidth:         860,
+		MinHeight:        520,
+		AssetServer:      &assetserver.Options{Assets: assets},
 		BackgroundColour: &options.RGBA{R: 27, G: 27, B: 27, A: 1},
 		OnStartup:        app.startup,
 		OnShutdown:       app.shutdown,
-		Bind: []interface{}{
-			app,
-		},
-		Windows: &windows.Options{
-			WebviewIsTransparent: true,
-			WindowIsTranslucent:  false,
-		},
+		Bind:             []interface{}{app},
+		Windows:          windowOptions,
 	})
 
 	if err != nil {

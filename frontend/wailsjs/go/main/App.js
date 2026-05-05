@@ -54,6 +54,14 @@ export function GenerateQRCode(arg1) {
   return window['go']['main']['App']['GenerateQRCode'](arg1);
 }
 
+export function GenerateRealityKeys() {
+  return window['go']['main']['App']['GenerateRealityKeys']();
+}
+
+export function GenerateTLS(arg1) {
+  return window['go']['main']['App']['GenerateTLS'](arg1);
+}
+
 export function GetActiveNodeID() {
   return window['go']['main']['App']['GetActiveNodeID']();
 }
@@ -76,6 +84,10 @@ export function GetCoreUptime() {
 
 export function GetDNSConfig() {
   return window['go']['main']['App']['GetDNSConfig']();
+}
+
+export function GetDeviceInfo() {
+  return window['go']['main']['App']['GetDeviceInfo']();
 }
 
 export function GetFilteredLogs(arg1, arg2) {
@@ -110,8 +122,16 @@ export function GetProxySettings() {
   return window['go']['main']['App']['GetProxySettings']();
 }
 
+export function GetPublicIP() {
+  return window['go']['main']['App']['GetPublicIP']();
+}
+
 export function GetRoutingRules() {
   return window['go']['main']['App']['GetRoutingRules']();
+}
+
+export function GetSystemUsage() {
+  return window['go']['main']['App']['GetSystemUsage']();
 }
 
 export function GetTrafficStats() {
@@ -140,6 +160,10 @@ export function MoveNode(arg1, arg2) {
 
 export function OpenExternalURL(arg1) {
   return window['go']['main']['App']['OpenExternalURL'](arg1);
+}
+
+export function RefreshPublicIP() {
+  return window['go']['main']['App']['RefreshPublicIP']();
 }
 
 export function RemoveDNSServer(arg1) {

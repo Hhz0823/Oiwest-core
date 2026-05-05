@@ -19,7 +19,7 @@ var (
 )
 
 const (
-	AppVersion = "1.0.0"
+	AppVersion = "2.0.1"
 	AppName    = "Oiwest Core"
 )
 
@@ -42,7 +42,7 @@ func main() {
 	}
 
 	log.Printf("============================================")
-	log.Printf("  %s v%s - DCCP Transport Protocol Kernel", AppName, AppVersion)
+	log.Printf("%s v%s - Universal Proxy Kernel (XrayCore Compatible)", AppName, AppVersion)
 	log.Printf("  RFC 4340 | v2ray-core | Xray-core | sing-box")
 	log.Printf("============================================")
 
@@ -76,9 +76,9 @@ func main() {
 	}
 
 	log.Printf("[%s] Kernel is running (PID: %d)", AppName, os.Getpid())
-	log.Printf("[%s] Transports: DCCP, TCP, WebSocket, QUIC, gRPC", AppName)
-	log.Printf("[%s] Protocols: VMess, VLESS, Trojan, Shadowsocks, SOCKS, HTTP", AppName)
-	log.Printf("[%s] Stealth: XTLS, Vision, Reality, Random Padding", AppName)
+	log.Printf("[%s] Transports: TCP, mKCP, WebSocket, HTTP/2, QUIC, gRPC, XHTTP, DCCP", AppName)
+	log.Printf("[%s] Protocols: VMess, VLESS, Trojan, Shadowsocks, SOCKS, HTTP, Dokodemo, Loopback, DNS", AppName)
+	log.Printf("[%s] Features: WorkerPool, BBR, DualStack, TLS, Stealth", AppName)
 
 	kernel.WaitForSignal()
 

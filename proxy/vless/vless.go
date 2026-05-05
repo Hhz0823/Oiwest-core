@@ -260,7 +260,7 @@ func (h *VLESSOutboundHandler) buildRequest(target string, isUDP bool) []byte {
 		if ip.To4() != nil {
 			addrHeader = append([]byte{AddrTypeIPv4}, ip.To4()...)
 		} else {
-			addrHeader = append([]byte{AddrTypeIPv6}, ip.To16())
+			addrHeader = append([]byte{AddrTypeIPv6}, ip.To16()...)
 		}
 	} else {
 		addrHeader = append([]byte{AddrTypeDomain, byte(len(host))}, []byte(host)...)

@@ -24,19 +24,19 @@ import (
 )
 
 const (
-	Version            = 1
-	CmdTCP             = 1
-	CmdUDP             = 2
-	AddrTypeIPv4       = 1
-	AddrTypeDomain     = 2
-	AddrTypeIPv6       = 3
-	SecurityNone       = 0
-	SecurityAES128GCM  = 1
-	SecurityChaCha20Poly1305 = 2
-	SecurityZero       = 3
-	KDFSaltConstAuthIDEncryptionKey = "AES Auth ID Encryption"
-	KDFSaltConstAEADRespHeaderLenKey = "AEAD Resp Header Len Key"
-	KDFSaltConstAEADRespHeaderLenIV  = "AEAD Resp Header Len IV"
+	Version                              = 1
+	CmdTCP                               = 1
+	CmdUDP                               = 2
+	AddrTypeIPv4                         = 1
+	AddrTypeDomain                       = 2
+	AddrTypeIPv6                         = 3
+	SecurityNone                         = 0
+	SecurityAES128GCM                    = 1
+	SecurityChaCha20Poly1305             = 2
+	SecurityZero                         = 3
+	KDFSaltConstAuthIDEncryptionKey      = "AES Auth ID Encryption"
+	KDFSaltConstAEADRespHeaderLenKey     = "AEAD Resp Header Len Key"
+	KDFSaltConstAEADRespHeaderLenIV      = "AEAD Resp Header Len IV"
 	KDFSaltConstAEADRespHeaderPayloadKey = "AEAD Resp Header Key"
 	KDFSaltConstAEADRespHeaderPayloadIV  = "AEAD Resp Header IV"
 )
@@ -96,8 +96,10 @@ func NewVMessInbound(tag string, port uint16, listen string, accounts []*Account
 	}
 }
 
-func (h *VMessInboundHandler) Tag() string       { return h.tag }
-func (h *VMessInboundHandler) Network() []string  { return []string{"tcp", "mKCP", "ws", "h2", "quic", "dccp"} }
+func (h *VMessInboundHandler) Tag() string { return h.tag }
+func (h *VMessInboundHandler) Network() []string {
+	return []string{"tcp", "mKCP", "ws", "h2", "quic", "dccp"}
+}
 
 func (h *VMessInboundHandler) Process(ctx context.Context, conn net.Conn, dispatch func(context.Context, net.Conn)) error {
 	conn.SetDeadline(time.Now().Add(h.timeout))
@@ -120,7 +122,7 @@ func (h *VMessInboundHandler) Process(ctx context.Context, conn net.Conn, dispat
 
 func (h *VMessInboundHandler) parseHeader(conn net.Conn) (*Account, []byte, byte, error) {
 	buf := make([]byte, 64)
-	n, err := io.ReadFull(conn, buf[:49])
+	_, err := io.ReadFull(conn, buf[:49])
 	if err != nil {
 		return nil, nil, 0, fmt.Errorf("vmess: read auth info: %w", err)
 	}
@@ -157,12 +159,12 @@ func (h *VMessInboundHandler) generateAuthID(account *Account) []byte {
 
 func (h *VMessInboundHandler) decryptBody(conn net.Conn, account *Account, bodyAuth []byte, bodyOpt byte) (io.Reader, io.Writer, error) {
 	respHeaderLenKey := kdf(account.UUIDKey, KDFSaltConstAEADRespHeaderLenKey)
-	respHeaderLenIV  := kdf(account.UUIDKey, KDFSaltConstAEADRespHeaderLenIV)
+	respHeaderLenIV := kdf(account.UUIDKey, KDFSaltConstAEADRespHeaderLenIV)
 	respHeaderPayloadKey := kdf(account.UUIDKey, KDFSaltConstAEADRespHeaderPayloadKey)
-	respHeaderPayloadIV  := kdf(account.UUIDKey, KDFSaltConstAEADRespHeaderPayloadIV)
+	respHeaderPayloadIV := kdf(account.UUIDKey, KDFSaltConstAEADRespHeaderPayloadIV)
 
 	aeadKey := kdfSha256(account.UUIDKey, bodyAuth[:])
-	nonce := kdfSha256(account.UUIDKey, bodyOpt)
+	nonce := kdfSha256(account.UUIDKey, []byte{bodyOpt})
 
 	var aead cipher.AEAD
 	switch account.Cipher {
@@ -178,9 +180,9 @@ func (h *VMessInboundHandler) decryptBody(conn net.Conn, account *Account, bodyA
 
 	reader := &vmessAEADReader{conn: conn, aead: aead, nonce: nonce}
 	writer := &vmessAEADWriter{
-		conn:                conn,
-		respHeaderLenKey:    respHeaderLenKey,
-		respHeaderLenIV:     respHeaderLenIV,
+		conn:                 conn,
+		respHeaderLenKey:     respHeaderLenKey,
+		respHeaderLenIV:      respHeaderLenIV,
 		respHeaderPayloadKey: respHeaderPayloadKey,
 		respHeaderPayloadIV:  respHeaderPayloadIV,
 	}
@@ -265,13 +267,13 @@ func (r *vmessAEADReader) Read(p []byte) (int, error) {
 }
 
 type vmessAEADWriter struct {
-	conn                net.Conn
-	respHeaderLenKey    []byte
-	respHeaderLenIV     []byte
+	conn                 net.Conn
+	respHeaderLenKey     []byte
+	respHeaderLenIV      []byte
 	respHeaderPayloadKey []byte
 	respHeaderPayloadIV  []byte
-	headerSent          bool
-	mu                  sync.Mutex
+	headerSent           bool
+	mu                   sync.Mutex
 }
 
 func (w *vmessAEADWriter) Write(p []byte) (int, error) {
@@ -482,7 +484,9 @@ func buildVMessRequestHeader(authID, uuidKey []byte, security crypto.CipherType,
 	fnvHash := fnv1a32(header.Bytes())
 	result := make([]byte, 0, header.Len()+4)
 	result = append(result, header.Bytes()...)
-	binary.Write(&result, binary.BigEndian, fnvHash)
+	fnvBuf := make([]byte, 4)
+	binary.BigEndian.PutUint32(fnvBuf, fnvHash)
+	result = append(result, fnvBuf...)
 
 	return result
 }

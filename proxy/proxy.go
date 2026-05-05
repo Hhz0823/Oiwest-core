@@ -39,10 +39,10 @@ type Link struct {
 }
 
 type HandlerConfig struct {
-	Tag           string
-	Port          uint16
-	Listen        string
-	Settings      json.RawMessage
+	Tag            string
+	Port           uint16
+	Listen         string
+	Settings       json.RawMessage
 	StreamSettings *transport.StreamSettings
 }
 
@@ -110,6 +110,10 @@ func (pm *ProxyManager) Start() error {
 }
 
 func (pm *ProxyManager) createInboundHandler(inbound *config.InboundConfig) (InboundHandler, error) {
+	factory, err := GetInboundFactory(ProtocolType(inbound.Protocol))
+	if err == nil {
+		return factory(pm.ctx, inbound, pm)
+	}
 	switch inbound.Protocol {
 	case "dccp":
 		return &DCCPInboundHandler{
@@ -121,53 +125,53 @@ func (pm *ProxyManager) createInboundHandler(inbound *config.InboundConfig) (Inb
 		}, nil
 	case "socks":
 		return &SOCKSInboundHandler{
-			tag:      inbound.Tag,
-			port:     inbound.Port,
-			listen:   inbound.Listen,
-			manager:  pm,
+			tag:     inbound.Tag,
+			port:    inbound.Port,
+			listen:  inbound.Listen,
+			manager: pm,
 		}, nil
 	case "http":
 		return &HTTPInboundHandler{
-			tag:      inbound.Tag,
-			port:     inbound.Port,
-			listen:   inbound.Listen,
-			manager:  pm,
+			tag:     inbound.Tag,
+			port:    inbound.Port,
+			listen:  inbound.Listen,
+			manager: pm,
 		}, nil
 	case "vmess":
 		return &VmessInboundHandler{
-			tag:      inbound.Tag,
-			port:     inbound.Port,
-			listen:   inbound.Listen,
-			settings: inbound.Settings,
+			tag:            inbound.Tag,
+			port:           inbound.Port,
+			listen:         inbound.Listen,
+			settings:       inbound.Settings,
 			streamSettings: inbound.StreamSettings,
-			manager:  pm,
+			manager:        pm,
 		}, nil
 	case "vless":
 		return &VlessInboundHandler{
-			tag:      inbound.Tag,
-			port:     inbound.Port,
-			listen:   inbound.Listen,
-			settings: inbound.Settings,
+			tag:            inbound.Tag,
+			port:           inbound.Port,
+			listen:         inbound.Listen,
+			settings:       inbound.Settings,
 			streamSettings: inbound.StreamSettings,
-			manager:  pm,
+			manager:        pm,
 		}, nil
 	case "trojan":
 		return &TrojanInboundHandler{
-			tag:      inbound.Tag,
-			port:     inbound.Port,
-			listen:   inbound.Listen,
-			settings: inbound.Settings,
+			tag:            inbound.Tag,
+			port:           inbound.Port,
+			listen:         inbound.Listen,
+			settings:       inbound.Settings,
 			streamSettings: inbound.StreamSettings,
-			manager:  pm,
+			manager:        pm,
 		}, nil
 	case "shadowsocks":
 		return &ShadowsocksInboundHandler{
-			tag:      inbound.Tag,
-			port:     inbound.Port,
-			listen:   inbound.Listen,
-			settings: inbound.Settings,
+			tag:            inbound.Tag,
+			port:           inbound.Port,
+			listen:         inbound.Listen,
+			settings:       inbound.Settings,
 			streamSettings: inbound.StreamSettings,
-			manager:  pm,
+			manager:        pm,
 		}, nil
 	default:
 		return nil, ErrUnsupportedProxy
@@ -243,13 +247,60 @@ type DCCPInboundHandler struct {
 	manager  *ProxyManager
 }
 
-func (h *DCCPInboundHandler) Tag() string {
-	return h.tag
+func NewDCCPInboundHandler(tag string, port uint16, listen string, settings *transport.StreamSettings, mgr *ProxyManager) *DCCPInboundHandler {
+	return &DCCPInboundHandler{tag: tag, port: port, listen: listen, settings: settings, manager: mgr}
 }
 
-func (h *DCCPInboundHandler) Network() []string {
-	return []string{"dccp"}
+func NewSOCKSInboundHandler(tag string, port uint16, listen string, mgr *ProxyManager) *SOCKSInboundHandler {
+	return &SOCKSInboundHandler{tag: tag, port: port, listen: listen, manager: mgr}
 }
+
+func NewHTTPInboundHandler(tag string, port uint16, listen string, mgr *ProxyManager) *HTTPInboundHandler {
+	return &HTTPInboundHandler{tag: tag, port: port, listen: listen, manager: mgr}
+}
+
+func NewVmessInboundHandler(tag string, port uint16, listen string, settings json.RawMessage, streamSettings *transport.StreamSettings, mgr *ProxyManager) *VmessInboundHandler {
+	return &VmessInboundHandler{tag: tag, port: port, listen: listen, settings: settings, streamSettings: streamSettings, manager: mgr}
+}
+
+func NewVlessInboundHandler(tag string, port uint16, listen string, settings json.RawMessage, streamSettings *transport.StreamSettings, mgr *ProxyManager) *VlessInboundHandler {
+	return &VlessInboundHandler{tag: tag, port: port, listen: listen, settings: settings, streamSettings: streamSettings, manager: mgr}
+}
+
+func NewTrojanInboundHandler(tag string, port uint16, listen string, settings json.RawMessage, streamSettings *transport.StreamSettings, mgr *ProxyManager) *TrojanInboundHandler {
+	return &TrojanInboundHandler{tag: tag, port: port, listen: listen, settings: settings, streamSettings: streamSettings, manager: mgr}
+}
+
+func NewShadowsocksInboundHandler(tag string, port uint16, listen string, settings json.RawMessage, streamSettings *transport.StreamSettings, mgr *ProxyManager) *ShadowsocksInboundHandler {
+	return &ShadowsocksInboundHandler{tag: tag, port: port, listen: listen, settings: settings, streamSettings: streamSettings, manager: mgr}
+}
+
+func NewDCCPOutboundHandler(tag string, target netaddr.Address, streamSettings *transport.StreamSettings) *DCCPOutboundHandler {
+	return &DCCPOutboundHandler{tag: tag, target: target, streamSettings: streamSettings}
+}
+
+func NewDirectOutboundHandler(tag string) *DirectOutboundHandler {
+	return &DirectOutboundHandler{tag: tag}
+}
+
+func NewFreedomOutboundHandler(tag string) *FreedomOutboundHandler {
+	return &FreedomOutboundHandler{tag: tag}
+}
+
+func NewBlackholeOutboundHandler(tag string) *BlackholeOutboundHandler {
+	return &BlackholeOutboundHandler{tag: tag}
+}
+
+func NewDNSOutboundHandler(tag string, network string, address string, port uint16) *DNSOutboundHandler {
+	return &DNSOutboundHandler{tag: tag, network: network, address: address, port: port}
+}
+
+func NewSocksOutboundHandler(tag string) *SocksOutboundHandler {
+	return &SocksOutboundHandler{tag: tag}
+}
+
+func (h *DCCPInboundHandler) Tag() string       { return h.tag }
+func (h *DCCPInboundHandler) Network() []string { return []string{"dccp"} }
 
 func (h *DCCPInboundHandler) Process(ctx context.Context, conn net.Conn, handler InboundConnHandler) error {
 	if h.settings != nil && h.settings.Network == transport.TransportDCCP {
@@ -257,7 +308,6 @@ func (h *DCCPInboundHandler) Process(ctx context.Context, conn net.Conn, handler
 		handler(ctx, dccpTransport)
 		return nil
 	}
-
 	handler(ctx, conn)
 	return nil
 }
@@ -269,7 +319,7 @@ type SOCKSInboundHandler struct {
 	manager *ProxyManager
 }
 
-func (h *SOCKSInboundHandler) Tag() string     { return h.tag }
+func (h *SOCKSInboundHandler) Tag() string       { return h.tag }
 func (h *SOCKSInboundHandler) Network() []string { return []string{"tcp"} }
 func (h *SOCKSInboundHandler) Process(ctx context.Context, conn net.Conn, handler InboundConnHandler) error {
 	handler(ctx, conn)
@@ -342,7 +392,7 @@ type TrojanInboundHandler struct {
 }
 
 func (h *TrojanInboundHandler) Tag() string       { return h.tag }
-func (h *TrojanInboundHandler) Network() []string { return []string{"tcp", "dccp"} }
+func (h *TrojanInboundHandler) Network() []string { return []string{"tcp", "ws", "h2", "grpc", "dccp"} }
 func (h *TrojanInboundHandler) Process(ctx context.Context, conn net.Conn, handler InboundConnHandler) error {
 	if h.streamSettings != nil && h.streamSettings.Network == transport.TransportDCCP {
 		dccpTransport := transport.NewDCCPTransport(h.streamSettings)
@@ -380,9 +430,7 @@ type DCCPOutboundHandler struct {
 	streamSettings *transport.StreamSettings
 }
 
-func (h *DCCPOutboundHandler) Tag() string {
-	return h.tag
-}
+func (h *DCCPOutboundHandler) Tag() string { return h.tag }
 
 func (h *DCCPOutboundHandler) Process(ctx context.Context, link *Link) error {
 	targetAddr := &net.TCPAddr{
@@ -396,7 +444,6 @@ func (h *DCCPOutboundHandler) Process(ctx context.Context, link *Link) error {
 			return err
 		}
 		defer dccpTransport.Close()
-
 		errCh := make(chan error, 2)
 		go func() {
 			_, err := io.Copy(dccpTransport, link.Reader)
@@ -406,7 +453,6 @@ func (h *DCCPOutboundHandler) Process(ctx context.Context, link *Link) error {
 			_, err := io.Copy(link.Writer, dccpTransport)
 			errCh <- err
 		}()
-
 		select {
 		case err := <-errCh:
 			return err
@@ -420,7 +466,6 @@ func (h *DCCPOutboundHandler) Process(ctx context.Context, link *Link) error {
 		return err
 	}
 	defer conn.Close()
-
 	errCh := make(chan error, 2)
 	go func() {
 		_, err := io.Copy(conn, link.Reader)
@@ -430,13 +475,122 @@ func (h *DCCPOutboundHandler) Process(ctx context.Context, link *Link) error {
 		_, err := io.Copy(link.Writer, conn)
 		errCh <- err
 	}()
-
 	select {
 	case err := <-errCh:
 		return err
 	case <-ctx.Done():
 		return ctx.Err()
 	}
+}
+
+type VMessOutboundHandler struct {
+	tag            string
+	address        string
+	port           uint16
+	uuid           string
+	security       int
+	streamSettings *transport.StreamSettings
+}
+
+func (h *VMessOutboundHandler) Tag() string { return h.tag }
+func (h *VMessOutboundHandler) Process(ctx context.Context, link *Link) error {
+	return nil
+}
+
+type VLESSOutboundHandler struct {
+	tag            string
+	address        string
+	port           uint16
+	uuid           string
+	flow           string
+	streamSettings *transport.StreamSettings
+}
+
+func (h *VLESSOutboundHandler) Tag() string { return h.tag }
+func (h *VLESSOutboundHandler) Process(ctx context.Context, link *Link) error {
+	return nil
+}
+
+type TrojanOutboundHandler struct {
+	tag            string
+	address        string
+	port           uint16
+	password       string
+	streamSettings *transport.StreamSettings
+}
+
+func (h *TrojanOutboundHandler) Tag() string { return h.tag }
+func (h *TrojanOutboundHandler) Process(ctx context.Context, link *Link) error {
+	return nil
+}
+
+type ShadowsocksOutboundHandler struct {
+	tag      string
+	address  string
+	port     uint16
+	method   string
+	password string
+}
+
+func (h *ShadowsocksOutboundHandler) Tag() string { return h.tag }
+func (h *ShadowsocksOutboundHandler) Process(ctx context.Context, link *Link) error {
+	return nil
+}
+
+type SocksOutboundHandler struct {
+	tag     string
+	address string
+	port    uint16
+	user    string
+	pass    string
+}
+
+func (h *SocksOutboundHandler) Tag() string { return h.tag }
+func (h *SocksOutboundHandler) Process(ctx context.Context, link *Link) error {
+	return nil
+}
+
+type DirectOutboundHandler struct {
+	tag string
+}
+
+func (h *DirectOutboundHandler) Tag() string { return h.tag }
+func (h *DirectOutboundHandler) Process(ctx context.Context, link *Link) error {
+	return errors.New("direct outbound: no target specified")
+}
+
+type FreedomOutboundHandler struct {
+	tag string
+}
+
+func (h *FreedomOutboundHandler) Tag() string { return h.tag }
+func (h *FreedomOutboundHandler) Process(ctx context.Context, link *Link) error {
+	go io.Copy(io.Discard, link.Reader)
+	return nil
+}
+
+type BlackholeOutboundHandler struct {
+	tag string
+}
+
+func (h *BlackholeOutboundHandler) Tag() string { return h.tag }
+func (h *BlackholeOutboundHandler) Process(ctx context.Context, link *Link) error {
+	go io.Copy(io.Discard, link.Reader)
+	return nil
+}
+
+func itoa(n int) string {
+	if n == 0 {
+		return "0"
+	}
+	var buf [20]byte
+	i := len(buf)
+	for n > 0 {
+		i--
+		buf[i] = byte('0' + n%10)
+		n /= 10
+	}
+	return string(buf[i:])
 }
 
 func init() {

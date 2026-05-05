@@ -17,14 +17,17 @@ var (
 type TransportProtocol string
 
 const (
-	TransportTCP     TransportProtocol = "tcp"
-	TransportDCCP    TransportProtocol = "dccp"
-	TransportDCCPOverUDP TransportProtocol = "dccpou"
-	TransportWebSocket TransportProtocol = "ws"
-	TransportHTTP2    TransportProtocol = "h2"
-	TransportGRPC     TransportProtocol = "grpc"
-	TransportQUIC     TransportProtocol = "quic"
-	TransportDCCPOverQUIC TransportProtocol = "dccpq"
+	TransportTCP      TransportProtocol = "tcp"
+	TransportDCCP     TransportProtocol = "dccp"
+	TransportDCCPOverUDP  TransportProtocol = "dccpou"
+	TransportWebSocket     TransportProtocol = "ws"
+	TransportWebSocketv2   TransportProtocol = "wsv2"
+	TransportHTTP2         TransportProtocol = "h2"
+	TransportGRPC          TransportProtocol = "grpc"
+	TransportQUIC          TransportProtocol = "quic"
+	TransportDCCPOverQUIC  TransportProtocol = "dccpq"
+	TransportKCP           TransportProtocol = "mkcp"
+	TransportXHTTP         TransportProtocol = "xhttp"
 )
 
 type StreamSettings struct {
@@ -37,6 +40,8 @@ type StreamSettings struct {
 	HTTP2Settings    *HTTP2Settings    `json:"http2Settings"`
 	GRPCSettings     *GRPCSettings     `json:"grpcSettings"`
 	QUICSettings     *QUICSettings     `json:"quicSettings"`
+	KCPSettings      *KCPConfig        `json:"kcpSettings"`
+	XHTTPSettings    *XHTTPConfig      `json:"xhttpSettings"`
 	Sockopt          *Sockopt          `json:"sockopt"`
 	DialerProxy      string            `json:"dialerProxy"`
 }

@@ -63,6 +63,30 @@ export namespace services {
 		}
 	}
 	
+	export class DeviceInfo {
+	    os: string;
+	    arch: string;
+	    goVersion: string;
+	    cpuCores: number;
+	    hostname: string;
+	    totalMemory: number;
+	    appVersion: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new DeviceInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.os = source["os"];
+	        this.arch = source["arch"];
+	        this.goVersion = source["goVersion"];
+	        this.cpuCores = source["cpuCores"];
+	        this.hostname = source["hostname"];
+	        this.totalMemory = source["totalMemory"];
+	        this.appVersion = source["appVersion"];
+	    }
+	}
 	export class InboundSettings {
 	    auth?: string;
 	    udp: boolean;
@@ -223,6 +247,10 @@ export namespace services {
 	    protocol: string;
 	    address: string;
 	    port: number;
+	    address6?: string;
+	    port6?: number;
+	    ipv6: boolean;
+	    multiLine: boolean;
 	    uuid?: string;
 	    password?: string;
 	    security?: string;
@@ -237,6 +265,23 @@ export namespace services {
 	    shortId?: string;
 	    spiderX?: string;
 	    allowInsecure: boolean;
+	    bbrType?: string;
+	    tlsCertFile?: string;
+	    tlsKeyFile?: string;
+	    mkcpHeader?: string;
+	    mkcpSeed?: string;
+	    xhttpMode?: string;
+	    xhttpPath?: string;
+	    quicSecurity?: string;
+	    quicKey?: string;
+	    headerType?: string;
+	    h2Path?: string;
+	    h2Host?: string;
+	    dsUseDomain: boolean;
+	    wireguardPriv?: string;
+	    wireguardPub?: string;
+	    wireguardPeers?: string;
+	    ssMethod?: string;
 	    latency: number;
 	    upload: number;
 	    download: number;
@@ -257,6 +302,10 @@ export namespace services {
 	        this.protocol = source["protocol"];
 	        this.address = source["address"];
 	        this.port = source["port"];
+	        this.address6 = source["address6"];
+	        this.port6 = source["port6"];
+	        this.ipv6 = source["ipv6"];
+	        this.multiLine = source["multiLine"];
 	        this.uuid = source["uuid"];
 	        this.password = source["password"];
 	        this.security = source["security"];
@@ -271,6 +320,23 @@ export namespace services {
 	        this.shortId = source["shortId"];
 	        this.spiderX = source["spiderX"];
 	        this.allowInsecure = source["allowInsecure"];
+	        this.bbrType = source["bbrType"];
+	        this.tlsCertFile = source["tlsCertFile"];
+	        this.tlsKeyFile = source["tlsKeyFile"];
+	        this.mkcpHeader = source["mkcpHeader"];
+	        this.mkcpSeed = source["mkcpSeed"];
+	        this.xhttpMode = source["xhttpMode"];
+	        this.xhttpPath = source["xhttpPath"];
+	        this.quicSecurity = source["quicSecurity"];
+	        this.quicKey = source["quicKey"];
+	        this.headerType = source["headerType"];
+	        this.h2Path = source["h2Path"];
+	        this.h2Host = source["h2Host"];
+	        this.dsUseDomain = source["dsUseDomain"];
+	        this.wireguardPriv = source["wireguardPriv"];
+	        this.wireguardPub = source["wireguardPub"];
+	        this.wireguardPeers = source["wireguardPeers"];
+	        this.ssMethod = source["ssMethod"];
 	        this.latency = source["latency"];
 	        this.upload = source["upload"];
 	        this.download = source["download"];
@@ -295,6 +361,46 @@ export namespace services {
 		    }
 		    return a;
 		}
+	}
+	export class SystemUsage {
+	    cpuPercent: number;
+	    memoryUsed: number;
+	    memoryTotal: number;
+	    memoryPercent: number;
+	    publicIp: string;
+	    publicIpv6: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SystemUsage(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.cpuPercent = source["cpuPercent"];
+	        this.memoryUsed = source["memoryUsed"];
+	        this.memoryTotal = source["memoryTotal"];
+	        this.memoryPercent = source["memoryPercent"];
+	        this.publicIp = source["publicIp"];
+	        this.publicIpv6 = source["publicIpv6"];
+	    }
+	}
+	export class TLSKeyPair {
+	    certPem: string;
+	    keyPem: string;
+	    certFile: string;
+	    keyFile: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new TLSKeyPair(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.certPem = source["certPem"];
+	        this.keyPem = source["keyPem"];
+	        this.certFile = source["certFile"];
+	        this.keyFile = source["keyFile"];
+	    }
 	}
 	export class TrafficStats {
 	    uploadSpeed: number;

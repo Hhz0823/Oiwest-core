@@ -28,6 +28,10 @@ export function EnableProxy():Promise<void>;
 
 export function GenerateQRCode(arg1:string):Promise<string>;
 
+export function GenerateRealityKeys():Promise<Record<string, string>>;
+
+export function GenerateTLS(arg1:string):Promise<services.TLSKeyPair>;
+
 export function GetActiveNodeID():Promise<string>;
 
 export function GetAppVersion():Promise<string>;
@@ -39,6 +43,8 @@ export function GetCoreStatus():Promise<string>;
 export function GetCoreUptime():Promise<string>;
 
 export function GetDNSConfig():Promise<services.DNSConfig>;
+
+export function GetDeviceInfo():Promise<services.DeviceInfo>;
 
 export function GetFilteredLogs(arg1:string,arg2:number):Promise<Array<string>>;
 
@@ -56,7 +62,11 @@ export function GetNodes():Promise<Array<services.ServerNode>>;
 
 export function GetProxySettings():Promise<services.ProxySettings>;
 
+export function GetPublicIP():Promise<string>;
+
 export function GetRoutingRules():Promise<Array<services.RoutingRule>>;
+
+export function GetSystemUsage():Promise<services.SystemUsage>;
 
 export function GetTrafficStats():Promise<services.TrafficStats>;
 
@@ -71,6 +81,8 @@ export function IsProxyEnabled():Promise<boolean>;
 export function MoveNode(arg1:string,arg2:string):Promise<void>;
 
 export function OpenExternalURL(arg1:string):Promise<void>;
+
+export function RefreshPublicIP():Promise<string>;
 
 export function RemoveDNSServer(arg1:number):Promise<void>;
 

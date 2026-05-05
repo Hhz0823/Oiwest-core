@@ -20,11 +20,9 @@ interface SettingsState {
 }
 
 export const useSettingsStore = create<SettingsState>((set) => {
-  const saved = typeof localStorage !== 'undefined' ? localStorage.getItem('oiwest-settings') : null
-  const parsed = saved ? JSON.parse(saved) : {}
   return {
-    lang: (parsed.lang as Lang) || 'zh',
-    theme: (parsed.theme as Theme) || 'dark',
+    lang: 'zh',
+    theme: 'light',
     setLang: (lang) => {
       set({ lang })
       localStorage.setItem('oiwest-settings', JSON.stringify({ ...useSettingsStore.getState(), lang }))
@@ -35,8 +33,7 @@ export const useSettingsStore = create<SettingsState>((set) => {
       localStorage.setItem('oiwest-settings', JSON.stringify({ ...useSettingsStore.getState(), theme }))
     },
     initSettings: () => {
-      const state = useSettingsStore.getState()
-      document.documentElement.setAttribute('data-theme', state.theme)
+      document.documentElement.setAttribute('data-theme', 'light')
     },
   }
 })
