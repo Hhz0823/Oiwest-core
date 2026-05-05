@@ -99,15 +99,6 @@ Oiwest Core 是一个高性能、模块化的代理协议内核。最初以 **DC
 | `darwin-arm64` | ARM64 | macOS Apple Silicon (M1/M2/M3/M4) |
 | `android-arm64` | ARM64 | Android 设备 (Termux) |
 
-### GUI 桌面程序（4 个包）
-
-| 包名 | 架构 | 说明 |
-|---|---|---|
-| `gui-windows-amd64` | x64 | Windows 图形界面，带节点管理/流量监控/系统代理 |
-| `gui-windows-arm64` | ARM64 | Windows on ARM 图形界面 |
-| `gui-darwin-amd64` | x64 | macOS Intel 图形界面 |
-| `gui-darwin-arm64` | ARM64 | macOS Apple Silicon 图形界面 |
-
 ---
 
 ## 🏗️ 从源码构建
