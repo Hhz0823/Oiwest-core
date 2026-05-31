@@ -1,4 +1,4 @@
-<p align="center">
+﻿<p align="center">
   <img src="frontend/public/logo.svg" alt="Oiwest Core" width="160" />
 </p>
 
@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/version-2.0.1-blue" />
+  <img src="https://img.shields.io/badge/version-2.1.0-blue" />
   <img src="https://img.shields.io/badge/go-1.22.0%2B-00ADD8" />
   <img src="https://img.shields.io/badge/license-MIT-green" />
   <img src="https://img.shields.io/badge/platforms-18%2B-orange" />
@@ -551,6 +551,30 @@ oiwest-core/
 
 ---
 
+
+## ⚡ v2.1.0 性能优化
+
+### 内存与缓冲区
+- **缓冲池分层**: 默认 2KB → 32KB，四级池化 (4K/8K/16K/32K)，系统调用减少 ~16 倍
+- **MuxSession**: WriteFrame 复用预分配缓冲区，eadLoop 数据缓冲区跨帧复用
+- **gRPC**: 帧头栈分配 [5]byte，写入合并帧头+数据为单次 syscall
+
+### 并发与锁
+- **DCCP 传输**: 读写锁分离 (eadMu/writeMu)，读写不再互相阻塞
+- **BBR 拥塞控制**: sync.Mutex → sync.RWMutex，只读方法使用 RLock
+- **StatCounter**: tomic 操作替代普通 int64，消除数据竞争
+
+### 动态资源管理
+- **WorkerPool**: 空闲超时自动缩容 (最少保留 25%)，队列超 75% 自动扩容 (上限 4x CPU)
+- **代理管理器**: 连接信号量 (4096 上限) + TCP KeepAlive + 优雅拒绝
+- **QUIC**: accept channel 16 → 64，减少高并发连接丢弃
+
+### 稳定性修复
+- **DCCP**: markClosed() 使用 sync.Once 防止重复关闭；sendAck 安全快照端口
+- **DualStack**: 探测使用实际端口 (原硬编码 80)；IPv6 使用 
+et.JoinHostPort
+- **WebSocket**: SetDeadline 同时设置读写 deadline；Read 使用流式 NextReader
+
 ## 📄 License
 
 MIT License. Copyright (c) 2025 Oiwest.
@@ -563,3 +587,5 @@ MIT License. Copyright (c) 2025 Oiwest.
 <p align="center">
   <sub>⚠️ 本项目仅供学习和研究目的使用，请遵守当地法律法规。</sub>
 </p>
+
+

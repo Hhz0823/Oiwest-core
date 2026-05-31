@@ -1,3 +1,47 @@
+﻿# Build output
 build/
-frontend/node_modules/
-frontend/dist/
+dist/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Go
+*.test
+*.out
+*.prof
+go.work
+go.work.sum
+
+# GUI frontend
+gui/frontend/node_modules/
+gui/frontend/dist/
+gui/frontend/.cache/
+cmd/gui/frontend_dist/
+
+# O-ui
+O-ui/.gocache/
+O-ui/.gopath/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# OS
+.DS_Store
+._*
+.Spotlight-V100
+.Trashes
+
+# Logs
+*.log
+logs/
+
+# Config (runtime generated)
+config.json
+oiwest-core.pid

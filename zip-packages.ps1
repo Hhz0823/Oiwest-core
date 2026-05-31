@@ -1,5 +1,5 @@
-$BUILD_DIR = "d:\Oiwest core\build"
-$VERSION = "2.0.1"
+﻿$BUILD_DIR = "d:\Oiwest core\build"
+$VERSION = "2.1.0"
 
 Remove-Item -Recurse -Force "$BUILD_DIR\zip" -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force "$BUILD_DIR\zip" | Out-Null
@@ -28,3 +28,4 @@ Get-ChildItem "$BUILD_DIR\zip" | ForEach-Object {
 Write-Host ""
 Write-Host "Output: $BUILD_DIR\zip"
 Write-Host "Done!"
+

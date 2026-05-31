@@ -1,6 +1,6 @@
-$ErrorActionPreference = "Continue"
+﻿$ErrorActionPreference = "Continue"
 $BUILD_DIR = "build"
-$VERSION = "2.0.1"
+$VERSION = "2.1.0"
 $CGO = "0"
 $LDFLAGS = "-s -w"
 $GOPROXY = "https://goproxy.cn,direct"
@@ -63,7 +63,7 @@ foreach ($p in $platforms) {
     $daemonOk = $true
 
     try {
-        $cliResult = go build -ldflags "$LDFLAGS" -o $cliPath ./cmd/oiwest-core 2>&1
+        $cliResult = go build -ldflags "$LDFLAGS" -o $cliPath ./app/cmd/cli 2>&1
         if ($LASTEXITCODE -ne 0) { $cliOk = $false; $failed += "$($p.DIR)-cli" }
     } catch {
         $cliOk = $false
@@ -71,7 +71,7 @@ foreach ($p in $platforms) {
     }
 
     try {
-        $daemonResult = go build -ldflags "$LDFLAGS" -o $daemonPath ./cmd/oiwest-daemon 2>&1
+        $daemonResult = go build -ldflags "$LDFLAGS" -o $daemonPath ./app/cmd/daemon 2>&1
         if ($LASTEXITCODE -ne 0) { $daemonOk = $false; $failed += "$($p.DIR)-daemon" }
     } catch {
         $daemonOk = $false
@@ -147,3 +147,4 @@ Write-Host ""
 Write-Host "  Output: $(Resolve-Path $zipDir)" -ForegroundColor Green
 Write-Host "  Build complete!" -ForegroundColor Green
 Write-Host "============================================" -ForegroundColor Cyan
+

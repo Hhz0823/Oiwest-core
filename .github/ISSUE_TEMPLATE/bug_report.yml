@@ -1,0 +1,78 @@
+﻿name: Bug Report
+description: Report a bug in Oiwest Core
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug! Please fill out the form below.
+
+  - type: input
+    id: version
+    attributes:
+      label: Oiwest Core Version
+      placeholder: "e.g. 2.1.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating System
+      options:
+        - Windows
+        - Linux
+        - macOS
+        - Android
+        - OpenWrt
+        - Other
+    validations:
+      required: true
+
+  - type: dropdown
+    id: arch
+    attributes:
+      label: Architecture
+      options:
+        - amd64
+        - arm64
+        - arm (ARMv7)
+        - 386
+        - mips
+        - mipsle
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      placeholder: Describe the bug clearly
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to Reproduce
+      placeholder: |
+        1. Run command '...'
+        2. With config '...'
+        3. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: config
+    attributes:
+      label: Config File
+      description: Paste your config.json (remove sensitive data)
+      render: json
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log Output
+      description: Paste relevant log output
+      render: text
+
